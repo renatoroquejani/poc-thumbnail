@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"log"
@@ -17,7 +18,7 @@ import (
 func main() {
 	// Define flags para configuração
 	htmlPath := flag.String("html", "", "Caminho para o arquivo HTML")
-	outputPath := flag.String("output", "thumbnail.png", "Caminho para a imagem de saída")
+	outputPath := flag.String("output", "thumbnail.png", "Caminho para a imagem de saída (ignorado se base64=true)")
 	width := flag.Int("width", 1280, "Largura do viewport em pixels")
 	height := flag.Int("height", 720, "Altura do viewport em pixels")
 	quality := flag.Int("quality", 90, "Qualidade da imagem (0-100, sendo 100 a melhor qualidade)")
@@ -25,6 +26,7 @@ func main() {
 	timeout := flag.Int("timeout", 60, "Timeout máximo em segundos")
 	headless := flag.Bool("headless", true, "Executar em modo headless (sem interface gráfica)")
 	waitTime := flag.Int("wait", 5, "Tempo de espera em segundos para carregamento de recursos")
+	asBase64 := flag.Bool("base64", true, "Retornar a imagem como string base64 em vez de salvar no arquivo")
 	flag.Parse()
 
 	// Verificar se o caminho do HTML foi fornecido
@@ -151,13 +153,32 @@ func main() {
 		}
 	}
 
-	// Salvar a imagem
-	log.Printf("Salvando a imagem em: %s", *outputPath)
-	if err := os.WriteFile(*outputPath, buf, 0644); err != nil {
-		log.Fatal(err)
-	}
+	// Processar o resultado
+	if *asBase64 {
+		// Converter para base64
+		b64Image := base64.StdEncoding.EncodeToString(buf)
 
-	log.Printf("Imagem gerada com sucesso! Tamanho: %d bytes", len(buf))
+		// Imprimir string base64 na saída padrão
+		fmt.Println(b64Image)
+
+		// Opcionalmente, imprimir tag de imagem HTML completa
+		// Determinar o tipo MIME correto
+		mimeType := "image/png"
+		if *quality < 100 {
+			mimeType = "image/jpeg"
+		}
+
+		log.Printf("Tamanho da string base64: %d bytes", len(b64Image))
+		log.Printf("Para usar em HTML: <img src=\"data:%s;base64,%s\" />", mimeType, b64Image[:20]+"...")
+	} else {
+		// Salvar a imagem como arquivo
+		log.Printf("Salvando a imagem em: %s", *outputPath)
+		if err := os.WriteFile(*outputPath, buf, 0644); err != nil {
+			log.Fatal(err)
+		}
+
+		log.Printf("Imagem gerada com sucesso! Tamanho: %d bytes", len(buf))
+	}
 }
 
 // getPageDimensions retorna as dimensões da página inteira
