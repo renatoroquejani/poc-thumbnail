@@ -4,7 +4,7 @@ Um utilitário em Go para renderizar páginas HTML em imagens, com suporte espec
 
 ## Sobre o Projeto
 
-Este projeto consiste em uma ferramenta de linha de comando que permite renderizar arquivos HTML em imagens (PNG/JPEG), utilizando o Chrome/Chromium em modo headless via ChromeDP. É especialmente útil para:
+Este projeto agora consiste em uma API RESTful que permite renderizar arquivos HTML em imagens (PNG/JPEG), utilizando o Chrome/Chromium em modo headless via ChromeDP. É especialmente útil para:
 
 - Gerar thumbnails de páginas HTML
 - Criar capturas de tela automatizadas
@@ -14,6 +14,8 @@ Este projeto consiste em uma ferramenta de linha de comando que permite renderiz
 ## Requisitos
 
 - [Go](https://golang.org/dl/) 1.16 ou superior
+- [Gin](https://github.com/gin-gonic/gin)
+- [Swaggo/swag](https://github.com/swaggo/swag) para documentação Swagger
 - [Chrome/Chromium](https://www.google.com/chrome/) instalado no sistema
 - Sistema operacional: Windows, Linux ou macOS
 
@@ -23,51 +25,44 @@ Este projeto consiste em uma ferramenta de linha de comando que permite renderiz
 2. Navegue até o diretório do projeto
 3. Instale as dependências necessárias:
 
-```bash
+```powershell
 go get -u github.com/chromedp/chromedp
+go get -u github.com/gin-gonic/gin
+go get -u github.com/swaggo/gin-swagger
+go get -u github.com/swaggo/files
 ```
 
-4. Compile o projeto:
+4. Instale o gerador de documentação Swagger:
 
-```bash
-go build
+```powershell
+go install github.com/swaggo/swag/cmd/swag@latest
 ```
 
-## Uso
+5. Gere a documentação Swagger:
 
-### Comando Básico
-
-```bash
-.\poc-thumbnail.exe -html=caminho/para/seu/arquivo.html -output=imagem.png
+```powershell
+swag init
 ```
 
-### Opções Disponíveis
+6. Rode o servidor:
 
-| Opção | Descrição | Padrão |
-|-------|-----------|--------|
-| `-html` | Caminho para o arquivo HTML a ser renderizado | `index.html` no diretório atual |
-| `-output` | Caminho para o arquivo de saída da imagem | `thumbnail.png` |
-| `-width` | Largura do viewport em pixels | 1280 |
-| `-height` | Altura do viewport em pixels | 720 |
-| `-quality` | Qualidade da imagem (0-100) | 90 |
-| `-full` | Capturar a página inteira (true) ou apenas a viewport (false) | true |
-| `-timeout` | Timeout máximo em segundos | 60 |
-| `-headless` | Executar em modo headless (sem interface gráfica) | true |
-| `-wait` | Tempo de espera em segundos para carregamento de recursos | 5 |
-| `-base64` | Retornar a imagem como string base64 em vez de salvar no arquivo | false |
-
-### Exemplos
-
-#### Capturar um arquivo HTML específico
-
-```bash
-.\poc-thumbnail.exe -html="C:\caminho\completo\para\arquivo.html" -output=resultado.png
+```powershell
+go run main.go
 ```
 
-#### Capturar com tamanho de viewport personalizado
+## Parâmetros da API
 
-```bash
-.\poc-thumbnail.exe -html=pagina.html -width=1920 -height=1080 -output=tela-larga.png
+| Parâmetro   | Tipo   | Descrição                                                        | Padrão |
+|-------------|--------|------------------------------------------------------------------|--------|
+| htmlPath    | string | Caminho para o arquivo HTML a ser renderizado                    | index.html |
+| width       | int    | Largura do viewport em pixels                                    | 1280   |
+| height      | int    | Altura do viewport em pixels                                     | 720    |
+| quality     | int    | Qualidade da imagem (0-100)                                      | 90     |
+| timeout     | int    | Timeout máximo em segundos                                       | 60     |
+| headless    | bool   | Executar em modo headless (sem interface gráfica)                | true   |
+| waitTime    | int    | Tempo de espera em segundos para carregamento de recursos        | 5      |
+| base64      | bool   | Retornar a imagem como string base64 em vez de salvar no arquivo | true   |
+| fullPage    | bool   | Capturar a página inteira (true) ou apenas a viewport (false)    | true   |
 ```
 
 #### Aguardar mais tempo para recursos carregarem (útil para páginas complexas)

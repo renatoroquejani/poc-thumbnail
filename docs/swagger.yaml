@@ -1,0 +1,66 @@
+basePath: /
+definitions:
+  main.ThumbnailRequest:
+    description: Parâmetros para geração de thumbnail
+    properties:
+      base64:
+        type: boolean
+      fullPage:
+        description: Capturar a página inteira (true) ou apenas a viewport (false)
+        type: boolean
+      headless:
+        type: boolean
+      height:
+        type: integer
+      htmlPath:
+        type: string
+      quality:
+        type: integer
+      timeout:
+        type: integer
+      waitTime:
+        type: integer
+      width:
+        type: integer
+    type: object
+  main.ThumbnailResponse:
+    description: Resposta da geração de thumbnail
+    properties:
+      base64:
+        type: string
+      message:
+        type: string
+      size:
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: Resposta da geração de thumbnail
+  title: Thumbnail API
+  version: "1.0"
+paths:
+  /thumbnail:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Parâmetros
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/main.ThumbnailRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.ThumbnailResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/main.ThumbnailResponse'
+      summary: Gera um thumbnail a partir de um HTML
+swagger: "2.0"
