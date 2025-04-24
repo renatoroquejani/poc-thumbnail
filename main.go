@@ -55,38 +55,46 @@ type ThumbnailResponse struct {
 // @Failure 400 {object} ThumbnailResponse
 // @Router /thumbnail [post]
 func GenerateThumbnail(c *gin.Context) {
+    log.Printf("[DEBUG] Início do GenerateThumbnail")
 	var req ThumbnailRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+        log.Printf("[DEBUG] Erro ao fazer bind do JSON: %v", err)
 		c.JSON(http.StatusBadRequest, ThumbnailResponse{Message: "JSON inválido: " + err.Error()})
 		return
 	}
 
+    log.Printf("[DEBUG] Parâmetros recebidos: %+v", req)
 	if req.HTMLPath == "" {
-		dir, err := os.Getwd()
-		if err != nil {
+        dir, err := os.Getwd()
+        if err != nil {
 			c.JSON(http.StatusBadRequest, ThumbnailResponse{Message: "Erro ao obter diretório: " + err.Error()})
 			return
 		}
-		req.HTMLPath = filepath.Join(dir, "index.html")
-	}
+        req.HTMLPath = filepath.Join(dir, "index.html")
+        log.Printf("[DEBUG] HTMLPath não informado, usando padrão: %s", req.HTMLPath)
+    }
 
-	info, err := os.Stat(req.HTMLPath)
-	if os.IsNotExist(err) {
+    info, err := os.Stat(req.HTMLPath)
+    if os.IsNotExist(err) {
+        log.Printf("[DEBUG] Arquivo HTML não existe: %s", req.HTMLPath)
 		c.JSON(http.StatusBadRequest, ThumbnailResponse{Message: "O arquivo HTML não existe: " + req.HTMLPath})
 		return
 	}
-	if info.IsDir() {
+    if info.IsDir() {
+        log.Printf("[DEBUG] Caminho fornecido é um diretório, não um arquivo: %s", req.HTMLPath)
 		c.JSON(http.StatusBadRequest, ThumbnailResponse{Message: "O caminho fornecido é um diretório, não um arquivo: " + req.HTMLPath})
 		return
 	}
 
-	absPath, err := filepath.Abs(req.HTMLPath)
-	if err != nil {
+    absPath, err := filepath.Abs(req.HTMLPath)
+    if err != nil {
+        log.Printf("[DEBUG] Erro ao obter caminho absoluto: %v", err)
 		c.JSON(http.StatusBadRequest, ThumbnailResponse{Message: "Erro ao obter caminho absoluto: " + err.Error()})
 		return
 	}
 
-	// Parâmetros padrão
+    log.Printf("[DEBUG] Caminho absoluto do HTML: %s", absPath)
+    // Parâmetros padrão
 	if req.Width == 0 {
 		req.Width = 1280
 	}
@@ -107,56 +115,69 @@ func GenerateThumbnail(c *gin.Context) {
 		req.FullPage = true
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(req.Timeout)*time.Second)
-	defer cancel()
+    ctx, cancel := context.WithTimeout(context.Background(), time.Duration(req.Timeout)*time.Second)
+    defer cancel()
+    log.Printf("[DEBUG] Contexto de timeout criado: %ds", req.Timeout)
 
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", req.Headless),
-	)
-	allocCtx, allocCancel := chromedp.NewExecAllocator(ctx, opts...)
-	defer allocCancel()
+    opts := append(chromedp.DefaultExecAllocatorOptions[:],
+        chromedp.Flag("headless", req.Headless),
+        chromedp.Flag("no-sandbox", true),
+        chromedp.Flag("disable-gpu", true),
+        chromedp.Flag("disable-dev-shm-usage", true),
+        chromedp.Flag("disable-web-security", true),
+        chromedp.Flag("allow-running-insecure-content", true),
+    )
+    log.Printf("[DEBUG] Criando allocator do ChromeDP")
+    allocCtx, allocCancel := chromedp.NewExecAllocator(ctx, opts...)
+    defer allocCancel()
 
-	ctx, cancel = chromedp.NewContext(allocCtx)
-	defer cancel()
+    ctx, cancel = chromedp.NewContext(allocCtx)
+    defer cancel()
+    log.Printf("[DEBUG] Contexto do ChromeDP criado")
 
-	var buf []byte
-	if req.FullPage {
-		// Captura a página inteira
-		err = chromedp.Run(ctx,
-			chromedp.Navigate("file://"+absPath),
-			chromedp.Sleep(time.Duration(req.WaitTime)*time.Second),
-			chromedp.FullScreenshot(&buf, req.Quality),
-		)
-	} else {
-		err = chromedp.Run(ctx,
-			chromedp.Navigate("file://"+absPath),
-			chromedp.Sleep(time.Duration(req.WaitTime)*time.Second),
-			chromedp.CaptureScreenshot(&buf),
-		)
-	}
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ThumbnailResponse{Message: "Erro ao gerar thumbnail: " + err.Error()})
-		return
-	}
+    var buf []byte
+    log.Printf("[DEBUG] Iniciando navegação e captura do screenshot... (FullPage: %v)", req.FullPage)
+    if req.FullPage {
+        err = chromedp.Run(ctx,
+            chromedp.Navigate("file://"+absPath),
+            chromedp.Sleep(time.Duration(req.WaitTime)*time.Second),
+            chromedp.FullScreenshot(&buf, req.Quality),
+        )
+    } else {
+        err = chromedp.Run(ctx,
+            chromedp.Navigate("file://"+absPath),
+            chromedp.Sleep(time.Duration(req.WaitTime)*time.Second),
+            chromedp.CaptureScreenshot(&buf),
+        )
+    }
+    if err != nil {
+        log.Printf("[DEBUG] Erro ao rodar chromedp: %v", err)
+        c.JSON(http.StatusBadRequest, ThumbnailResponse{Message: "Erro ao gerar thumbnail: " + err.Error()})
+        return
+    }
+    log.Printf("[DEBUG] Screenshot capturado com sucesso, tamanho: %d bytes", len(buf))
 
-	if req.AsBase64 {
-		b64Image := base64.StdEncoding.EncodeToString(buf)
-		c.JSON(http.StatusOK, ThumbnailResponse{
-			Base64:  b64Image,
-			Size:    len(buf),
-			Message: "Imagem gerada com sucesso (base64)",
-		})
-	} else {
-		outputPath := "thumbnail.png"
-		if err := os.WriteFile(outputPath, buf, 0644); err != nil {
-			c.JSON(http.StatusInternalServerError, ThumbnailResponse{Message: "Erro ao salvar arquivo: " + err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, ThumbnailResponse{
-			Message: "Imagem salva em " + outputPath,
-			Size:    len(buf),
-		})
-	}
+    if req.AsBase64 {
+        b64Image := base64.StdEncoding.EncodeToString(buf)
+        log.Printf("[DEBUG] Retornando imagem em base64 (%d bytes)", len(b64Image))
+        c.JSON(http.StatusOK, ThumbnailResponse{
+            Base64:  b64Image,
+            Size:    len(buf),
+            Message: "Imagem gerada com sucesso (base64)",
+        })
+    } else {
+        outputPath := "thumbnail.png"
+        if err := os.WriteFile(outputPath, buf, 0644); err != nil {
+            log.Printf("[DEBUG] Erro ao salvar arquivo: %v", err)
+            c.JSON(http.StatusInternalServerError, ThumbnailResponse{Message: "Erro ao salvar arquivo: " + err.Error()})
+            return
+        }
+        log.Printf("[DEBUG] Imagem salva em %s (%d bytes)", outputPath, len(buf))
+        c.JSON(http.StatusOK, ThumbnailResponse{
+            Message: "Imagem salva em " + outputPath,
+            Size:    len(buf),
+        })
+    }
 }
 
 // getPageDimensions retorna as dimensões da página inteira
